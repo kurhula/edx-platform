@@ -89,11 +89,10 @@ class OutlineTabView(RetrieveAPIView):
         user_timezone_locale = user_timezone_locale_prefs(request)
         user_timezone = user_timezone_locale['user_timezone']
 
-        dates_tab_link = reverse('dates', args=[course.id])
+        dates_tab_link = request.build_absolute_uri(reverse('dates', args=[course.id]))
         if course_home_mfe_dates_tab_is_active(course.id):
             dates_tab_link = get_microfrontend_url(course_key=course.id, view_name='dates')
 
-        print(dates_tab_link)
 
         transformers = BlockStructureTransformers()
         transformers += course_blocks_api.get_course_block_access_transformers(request.user)
