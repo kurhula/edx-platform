@@ -19,6 +19,7 @@ class DateSummarySerializer(serializers.Serializer):
     description = serializers.CharField()
     learner_has_access = serializers.SerializerMethodField()
     link = serializers.SerializerMethodField()
+    title_html = serializers.CharField()
     title = serializers.CharField()
 
     def get_learner_has_access(self, block):
