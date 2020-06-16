@@ -2,7 +2,6 @@
 Outline Tab Views
 """
 
-
 from rest_framework.generics import RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -92,7 +91,6 @@ class OutlineTabView(RetrieveAPIView):
         dates_tab_link = request.build_absolute_uri(reverse('dates', args=[course.id]))
         if course_home_mfe_dates_tab_is_active(course.id):
             dates_tab_link = get_microfrontend_url(course_key=course.id, view_name='dates')
-
 
         transformers = BlockStructureTransformers()
         transformers += course_blocks_api.get_course_block_access_transformers(request.user)
