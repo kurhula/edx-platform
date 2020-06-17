@@ -100,12 +100,16 @@ class OutlineTabView(RetrieveAPIView):
 
         course_blocks = get_course_blocks(request.user, course_usage_key, transformers, include_completion=True)
 
-        data = {
-            'course_tools': course_tools,
-            'course_blocks': course_blocks,
+        dates_widget = { #information for the dates widget
             'course_date_blocks': [block for block in date_blocks if not isinstance(block, TodaysDate)],
             'dates_tab_link': dates_tab_link,
             'user_timezone': user_timezone,
+        }
+
+        data = {
+            'course_tools': course_tools,
+            'course_blocks': course_blocks,
+            'dates_widget': dates_widget,
         }
         context = self.get_serializer_context()
         context['course_key'] = course_key
