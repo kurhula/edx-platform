@@ -259,7 +259,6 @@ class CourseStartDate(DateSummary):
     Displays the start date of the course.
     """
     css_class = 'start-date'
-    title = ugettext_lazy('Course Starts')
 
     @property
     def date(self):
@@ -272,6 +271,12 @@ class CourseStartDate(DateSummary):
     @property
     def date_type(self):
         return 'course-start-date'
+
+    @property
+    def title(self):
+        if CourseEnrollment.get_enrollment(self.user, self.course_id).created > self.course.end:
+            return ugettext_lazy('Enrollment Date')
+        return ugettext_lazy('Course Starts')
 
     def register_alerts(self, request, course):
         """
