@@ -254,42 +254,10 @@ class CourseMetadata(object):
                 did_validate = False
                 errors.append({'message': text_type(err), 'model': model})
 
-        # Disallow updates to the proctoring provider after course start
-        proctoring_provider_model = filtered_dict.get('proctoring_provider')
-        if (
-            not user.is_staff and
-            proctoring_provider_model != descriptor.proctoring_provider and
-            datetime.now(pytz.UTC) > descriptor.start
-        ):
+        proctoring_errors = cls._validate_proctoring_settings(descriptor, filtered_dict, user)
+        if proctoring_errors:
+            errors = errors + proctoring_errors
             did_validate = False
-            message = (
-                'The proctoring provider cannot be modified after a course has started.'
-                ' Contact {support_email} for assistance'
-            ).format(support_email=settings.PARTNER_SUPPORT_EMAIL or 'support')
-            errors.append({'message': message, 'model': proctoring_provider_model})
-
-        # Require a valid escalation email if Proctortrack is chosen as the proctoring provider
-        escalation_email_model = filtered_dict.get('proctoring_escalation_email')
-        if escalation_email_model:
-            escalation_email = escalation_email_model.get('value')
-        else:
-            escalation_email = descriptor.proctoring_escalation_email
-
-        missing_escalation_email_msg = 'Provider \'{provider}\' requires an exam escalation contact.'
-        if proctoring_provider_model and proctoring_provider_model.get('value') == 'proctortrack':
-            if not escalation_email:
-                did_validate = False
-                message = missing_escalation_email_msg.format(provider=proctoring_provider_model.get('value'))
-                errors.append({'message': message, 'model': proctoring_provider_model})
-
-        if (
-            escalation_email_model and not proctoring_provider_model and
-            descriptor.proctoring_provider == 'proctortrack'
-        ):
-            if not escalation_email:
-                did_validate = False
-                message = missing_escalation_email_msg.format(provider=descriptor.proctoring_provider)
-                errors.append({'message': message, 'model': escalation_email_model})
 
         # If did validate, go ahead and update the metadata
         if did_validate:
@@ -309,3 +277,49 @@ class CourseMetadata(object):
             modulestore().update_item(descriptor, user.id)
 
         return cls.fetch(descriptor)
+
+    @staticmethod
+    def _validate_proctoring_settings(descriptor, settings_dict, user):
+        """
+        Verify proctoring settings 
+
+        Returns a list of error objects
+        """
+        errors = []
+
+        # Disallow updates to the proctoring provider after course start
+        proctoring_provider_model = settings_dict.get('proctoring_provider')
+        if (
+            not user.is_staff and
+            proctoring_provider_model != descriptor.proctoring_provider and
+            datetime.now(pytz.UTC) > descriptor.start
+        ):
+            message = (
+                'The proctoring provider cannot be modified after a course has started.'
+                ' Contact {support_email} for assistance'
+            ).format(support_email=settings.PARTNER_SUPPORT_EMAIL or 'support')
+            errors.append({'message': message, 'model': proctoring_provider_model})
+
+        # Require a valid escalation email if Proctortrack is chosen as the proctoring provider
+        escalation_email_model = settings_dict.get('proctoring_escalation_email')
+        if escalation_email_model:
+            escalation_email = escalation_email_model.get('value')
+        else:
+            escalation_email = descriptor.proctoring_escalation_email
+
+        missing_escalation_email_msg = 'Provider \'{provider}\' requires an exam escalation contact.'
+        if proctoring_provider_model and proctoring_provider_model.get('value') == 'proctortrack':
+            if not escalation_email:
+                message = missing_escalation_email_msg.format(provider=proctoring_provider_model.get('value'))
+                errors.append({'message': message, 'model': proctoring_provider_model})
+
+        if (
+            escalation_email_model and not proctoring_provider_model and
+            descriptor.proctoring_provider == 'proctortrack'
+        ):
+            if not escalation_email:
+                did_validate = False
+                message = missing_escalation_email_msg.format(provider=descriptor.proctoring_provider)
+                errors.append({'message': message, 'model': escalation_email_model})
+
+        return errors 
