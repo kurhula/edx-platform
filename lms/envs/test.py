@@ -486,6 +486,7 @@ FEATURES['ORGANIZATIONS_APP'] = True
 # Financial assistance page
 FEATURES['ENABLE_FINANCIAL_ASSISTANCE_FORM'] = True
 
+COURSE_CATALOG_URL_ROOT = 'https://catalog.example.com'
 COURSE_CATALOG_API_URL = 'https://catalog.example.com/api/v1'
 
 COMPREHENSIVE_THEME_DIRS = [REPO_ROOT / "themes", REPO_ROOT / "common/test"]
