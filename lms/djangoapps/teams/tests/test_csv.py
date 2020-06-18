@@ -6,10 +6,11 @@ from lms.djangoapps.program_enrollments.tests.factories import ProgramEnrollment
 from lms.djangoapps.teams import csv
 from lms.djangoapps.teams.models import CourseTeam, CourseTeamMembership
 from lms.djangoapps.teams.tests.factories import CourseTeamFactory
+from openedx.core.lib.teams_config import TeamsConfig
 from student.tests.factories import CourseEnrollmentFactory, UserFactory
+from util.testing import EventTestMixin
 from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
-from openedx.core.lib.teams_config import TeamsConfig
 
 
 class TeamMembershipCsvTests(SharedModuleStoreTestCase):
@@ -133,7 +134,7 @@ class TeamMembershipCsvTests(SharedModuleStoreTestCase):
 
 
 # pylint: disable=no-member
-class TeamMembershipImportManagerTests(SharedModuleStoreTestCase):
+class TeamMembershipImportManagerTests(SharedModuleStoreTestCase, EventTestMixin):
     """ Tests for TeamMembershipImportManager """
     @classmethod
     def setUpClass(cls):
@@ -152,6 +153,22 @@ class TeamMembershipImportManagerTests(SharedModuleStoreTestCase):
         cls.import_manager = csv.TeamMembershipImportManager(cls.course)
         cls.import_manager.teamset_ids = {ts.teamset_id for ts in cls.course.teamsets}
 
+    def assert_learner_added_emitted(self, team, user):
+        self.assert_event_emitted(
+            'edx.team.learner_added',
+            team=team,
+            user=user,
+            add_method='team_csv_import'
+        )
+
+    def assert_learner_removed_emitted(self, team, user):
+        self.assert_event_emitted(
+            'edx.team.learner_removed',
+            team=team,
+            user=user,
+            add_method='team_csv_import'
+        )
+
     def test_add_user_to_new_protected_team(self):
         """Adding a masters learner to a new team should create a team with organization protected status"""
         masters_learner = UserFactory.create(username='masters_learner')
@@ -164,6 +181,12 @@ class TeamMembershipImportManagerTests(SharedModuleStoreTestCase):
 
         self.import_manager.add_user_to_team(row)
         self.assertTrue(CourseTeam.objects.get(team_id__startswith='new_protected_team').organization_protected)
+        self.assert_event_emitted(
+            'edx.team.learner_added',
+            team=text_search,
+            user=None,
+            add_method='team_csv_import'
+        )
 
     def test_add_user_to_new_unprotected_team(self):
         """Adding a non-masters learner to a new team should create a team with no organization protected status"""
