@@ -7,10 +7,16 @@ import datetime
 import logging
 
 from django.conf import settings
+from django.contrib.sites.models import Site
 from django.utils.timezone import now
-from six import text_type
+from edx_ace import ace
+from edx_ace.recipient import Recipient
 
+from openedx.core.djangoapps.lang_pref import LANGUAGE_KEY
+from six import text_type
+from openedx.core.djangoapps.ace_common.template_context import get_base_template_context
 from lms.djangoapps.verify_student.tasks import send_request_to_ss_for_user
+from lms.djangoapps.verify_student.message_types import VerificationApproved
 
 log = logging.getLogger(__name__)
 
@@ -161,3 +167,30 @@ def can_verify_now(verification_status, expiration_datetime):
             and is_verification_expiring_soon(expiration_datetime)
         )
     )
+
+
+def send_verification_approved_email(user):
+    """
+    Sends email to user when ID verification has been approved.
+
+    :param user:
+    :return:
+    """
+    from openedx.core.lib.celery.task_utils import emulate_http_request
+    from openedx.core.djangoapps.user_api.preferences.api import get_user_preference
+    success = False
+    site = Site.objects.get_current()
+    message_context = get_base_template_context(site)
+    try:
+        with emulate_http_request(site=site, user=user):
+            msg = VerificationApproved(context=message_context).personalize(
+                recipient=Recipient(user.username, user.email),
+                language=get_user_preference(user, LANGUAGE_KEY),
+                user_context={'full_name': user.profile.name}
+            )
+            ace.send(msg)
+            success = True
+    except Exception:  # pylint: disable=broad-except
+        log.exception('Could not send email for verification user %s', user.username)
+        success = False
+    return success

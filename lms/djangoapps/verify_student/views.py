@@ -39,7 +39,7 @@ from lms.djangoapps.verify_student.models import SoftwareSecurePhotoVerification
 from lms.djangoapps.verify_student.services import IDVerificationService
 from lms.djangoapps.verify_student.ssencrypt import has_valid_signature
 from lms.djangoapps.verify_student.tasks import send_verification_status_email
-from lms.djangoapps.verify_student.utils import can_verify_now
+from lms.djangoapps.verify_student.utils import can_verify_now, send_verification_approved_email
 from openedx.core.djangoapps.commerce.utils import ecommerce_api_client
 from openedx.core.djangoapps.embargo import api as embargo_api
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
@@ -51,6 +51,7 @@ from student.models import CourseEnrollment
 from track import segment
 from util.db import outer_atomic
 from util.json_request import JsonResponse
+from verify_student.toggles import use_new_templates_for_id_verification_emails
 from xmodule.modulestore.django import modulestore
 
 log = logging.getLogger(__name__)
@@ -1155,7 +1156,10 @@ def results_callback(request):
             'email': user.email,
             'email_vars': verification_status_email_vars
         }
-        send_verification_status_email.delay(context)
+        if use_new_templates_for_id_verification_emails():
+            send_verification_approved_email(user)
+        else:
+            send_verification_status_email.delay(context)
 
     elif result == "FAIL":
         log.debug(u"Denying verification for %s", receipt_id)
