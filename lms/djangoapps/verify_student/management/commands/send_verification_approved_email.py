@@ -3,11 +3,12 @@ Django admin command to send verification approved email to learners
 """
 
 import logging
-
+import datetime
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 
-from verify_student.utils import send_verification_approved_email
+from verify_student import tasks
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,9 @@ class Command(BaseCommand):
         username = options['username']
         logger.info('1. Trying to send ID verification approved email to user: {}'.format(username))
         user = User.objects.get(username=username)
-
-        email_was_successful = send_verification_approved_email(user)
-        logger.info('2. Email sending to user: {}, success: {}'.format(username, email_was_successful))
+        expiry_date = datetime.date.today() + datetime.timedelta(
+            days=settings.VERIFY_STUDENT["DAYS_GOOD_FOR"]
+        )
+        task_id = tasks.send_verification_approved_email.delay(
+            context={'user_id': user.id, 'expiry_date': expiry_date.strftime("%m/%d/%Y")})
+        logger.info('2. Email sending to user: {}, task ID: {}'.format(username, task_id))

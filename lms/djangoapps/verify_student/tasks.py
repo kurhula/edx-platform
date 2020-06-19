@@ -10,9 +10,16 @@ import simplejson
 from celery import Task, task
 from celery.states import FAILURE
 from django.conf import settings
+from django.contrib.auth.models import User
+from django.contrib.sites.models import Site
 from django.core.mail import EmailMessage
+from edx_ace import ace
+from edx_ace.recipient import Recipient
 
+from openedx.core.djangoapps.ace_common.template_context import get_base_template_context
 from edxmako.shortcuts import render_to_string
+from lms.djangoapps.verify_student.message_types import VerificationApproved
+from openedx.core.djangoapps.lang_pref import LANGUAGE_KEY
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 
 ACE_ROUTING_KEY = getattr(settings, 'ACE_ROUTING_KEY', None)
@@ -92,6 +99,32 @@ def send_verification_status_email(context):
         msg.send(fail_silently=False)
     except SMTPException:
         log.warning(u"Failure in sending verification status e-mail to %s", dest_addr)
+
+
+@task(routing_key=ACE_ROUTING_KEY)
+def send_verification_approved_email(context):
+    """
+    Sends email to a learner when ID verification has been approved.
+    """
+    from openedx.core.lib.celery.task_utils import emulate_http_request
+    from openedx.core.djangoapps.user_api.preferences.api import get_user_preference
+
+    site = Site.objects.get_current()
+    message_context = get_base_template_context(site)
+    message_context.update(context)
+    user = User.objects.get(id=context['user_id'])
+    try:
+        with emulate_http_request(site=site, user=user):
+            msg = VerificationApproved(context=message_context).personalize(
+                recipient=Recipient(user.username, user.email),
+                language=get_user_preference(user, LANGUAGE_KEY),
+                user_context={'full_name': user.profile.name}
+            )
+            ace.send(msg)
+            log.info('Email sent to user: %r and receipt ID', user.username)
+
+    except Exception:  # pylint: disable=broad-except
+        log.exception('Could not send email for verification user %s', user.username)
 
 
 @task(

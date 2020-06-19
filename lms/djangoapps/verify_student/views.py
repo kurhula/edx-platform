@@ -2,7 +2,6 @@
 Views for the verification flow
 """
 
-
 import datetime
 import decimal
 import json
@@ -38,8 +37,8 @@ from lms.djangoapps.verify_student.image import InvalidImageData, decode_image_d
 from lms.djangoapps.verify_student.models import SoftwareSecurePhotoVerification, VerificationDeadline
 from lms.djangoapps.verify_student.services import IDVerificationService
 from lms.djangoapps.verify_student.ssencrypt import has_valid_signature
-from lms.djangoapps.verify_student.tasks import send_verification_status_email
-from lms.djangoapps.verify_student.utils import can_verify_now, send_verification_approved_email
+from lms.djangoapps.verify_student import tasks
+from lms.djangoapps.verify_student.utils import can_verify_now
 from openedx.core.djangoapps.commerce.utils import ecommerce_api_client
 from openedx.core.djangoapps.embargo import api as embargo_api
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
@@ -1141,25 +1140,26 @@ def results_callback(request):
                                                                ).update(expiry_date=None, expiry_email_date=None)
         log.debug(u'Approving verification for {}'.format(receipt_id))
         attempt.approve()
-        status = u"approved"
+
         expiry_date = datetime.date.today() + datetime.timedelta(
             days=settings.VERIFY_STUDENT["DAYS_GOOD_FOR"]
         )
-        verification_status_email_vars['expiry_date'] = expiry_date.strftime("%m/%d/%Y")
-        verification_status_email_vars['full_name'] = user.profile.name
-        subject = _(u"Your {platform_name} ID Verification Approved").format(
-            platform_name=settings.PLATFORM_NAME
-        )
-        context = {
-            'subject': subject,
-            'template': 'emails/passed_verification_email.txt',
-            'email': user.email,
-            'email_vars': verification_status_email_vars
-        }
         if use_new_templates_for_id_verification_emails():
-            send_verification_approved_email(user)
+            context = {'user_id': user.id, 'expiry_date': expiry_date.strftime("%m/%d/%Y")}
+            tasks.send_verification_approved_email.delay(context=context)
         else:
-            send_verification_status_email.delay(context)
+            verification_status_email_vars['expiry_date'] = expiry_date.strftime("%m/%d/%Y")
+            verification_status_email_vars['full_name'] = user.profile.name
+            subject = _(u"Your {platform_name} ID Verification Approved").format(
+                platform_name=settings.PLATFORM_NAME
+            )
+            context = {
+                'subject': subject,
+                'template': 'emails/passed_verification_email.txt',
+                'email': user.email,
+                'email_vars': verification_status_email_vars
+            }
+            tasks.send_verification_status_email.delay(context)
 
     elif result == "FAIL":
         log.debug(u"Denying verification for %s", receipt_id)
@@ -1178,7 +1178,7 @@ def results_callback(request):
             'email': user.email,
             'email_vars': verification_status_email_vars
         }
-        send_verification_status_email.delay(context)
+        tasks.send_verification_status_email.delay(context)
 
     elif result == "SYSTEM FAIL":
         log.debug(u"System failure for %s -- resetting to must_retry", receipt_id)
@@ -1214,6 +1214,7 @@ class VerificationStatusAPIView(APIView):
         * If there is a current verification, then "expires" is a ISO datetime string.
         * Otherwise, "expires" is omitted.
     """
+
     @method_decorator(login_required)
     def get(self, request):
         """
